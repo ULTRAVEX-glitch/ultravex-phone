@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام محاكاة أندرويد المتكامل 📱 OS</title>
+    <style>
+        :root {
+            --phone-width: 400px;
+            --phone-height: 820px;
+            --main-bg: url('https://unsplash.com');
+        }
+        body {
+            background: linear-gradient(135deg, #090d16, #111827);
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        /* هيكل الأندرويد الخارجي */
+        .phone-frame {
+            width: var(--phone-width);
+            height: var(--phone-height);
+            background: #000;
+            border-radius: 44px;
+            border: 12px solid #1f2937;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1;
+        }
+
+        .phone-frame.landscape {
+            width: 88vw;
+            height: 520px;
+            max-width: 1100px;
+            border-radius: 30px;
+            flex-direction: row-reverse;
+        }
+
+        /* شريط الحالة العلوي للأندرويد */
+        .status-bar {
+            height: 28px;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 25px;
+            font-size: 12px;
+            font-weight: bold;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 12;
+            color: #fff;
+        }
+        .phone-frame.landscape .status-bar { display: none; }
+
+        /* شاشة الهاتف الداخلية */
+        .phone-screen {
+            flex: 1;
+            background: var(--main-bg) no-repeat center center;
+            background-size: cover;
+            padding: 40px 15px 25px 15px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border-radius: 32px;
+        }
+        .phone-screen::-webkit-scrollbar { display: none; }
+        .phone-frame.landscape .phone-screen { padding: 15px; border-radius: 20px 0 0 20px; }
+
+        /* شبكة التطبيقات الـ Home Screen */
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            text-align: center;
+            padding-top: 15px;
+        }
+
+        .app-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            z-index: 2;
+        }
+        .app-icon:hover { transform: scale(1.08); }
+
+        .app-icon .icon-placeholder {
+            width: 65px;
+            height: 65px;
+            border-radius: 18px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            user-select: none;
+        }
+
+        /* تصميم الإشعارات المنبثقة التلقائية */
+        .notification-toast {
+            position: absolute;
+            top: -60px;
+            left: 5%;
+            width: 90%;
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid #334155;
+            padding: 10px 15px;
+            border-radius: 12px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 100;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+            transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 12px;
+        }
+        .notification-toast.show { top: 35px; }
+
+        /* ألوان وخلفيات التطبيقات الأساسية والمتجر */
+        .playstore-bg { background: #ffffff; color: #00f; font-weight: bold; font-size: 26px; box-shadow: inset 0 0 8px rgba(0,0,0,0.1); }
+        .settings-bg { background: linear-gradient(135deg, #4b5563, #1f2937); }
+        .chat-bg { background: linear-gradient(135deg, #06b6d4, #0284c7); }
+        .google-bg { background: #ffffff; color: #e11d48; }
+        .camera-bg { background: linear-gradient(135deg, #14b8a6, #0f766e); }
+        .files-bg { background: linear-gradient(135deg, #f59e0b, #b45309); }
+        .dynamic-app-bg { background: linear-gradient(135deg, #6366f1, #4338ca); }
+
+        .app-name { font-size: 11px; font-weight: 600; text-shadow: 1px 1px 3px rgba(0,0,0,0.9); white-space: nowrap; }
+
+        /* نافذة فتح التطبيق */
+        .app-window {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0f172a;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            animation: appOpen 0.3s ease-out;
+        }
+        @keyframes appOpen { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .app-bar {
+            background: #111827;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            box-sizing: border-box;
+            font-size: 13px;
+            font-weight: bold;
+            border-bottom: 1px solid #1f2937;
+        }
+
+        .close-btn { background: #ef4444; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .app-content { flex: 1; width: 100%; height: 100%; border: none; background: #000; }
+
+        /* أزرار أندرويد الثلاثة الجانبية للمحاكاة الكاملة */
+        .android-navbar {
+            display: none;
+            background: #111827;
+            width: 60px;
+            height: 100%;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            border-radius: 0 20px 20px 0;
+            border-left: 2px solid #1f2937;
+            box-sizing: border-box;
+        }
+        .phone-frame.landscape .android-navbar { display: flex; }
+        .nav-icon { font-size: 22px; cursor: pointer; color: #94a3b8; user-select: none; }
+        .nav-icon:hover { color: #fff; }
+
+        .home-bar {
+            width: 130px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            cursor: pointer;
+        }
+        .phone-frame.landscape .home-bar { display: none; }
+
+        /* واجهة تصميم متجر جوجل بلاي المخصص HTML */
+        .store-container { padding: 15px; background: #111827; height: 100%; overflow-y: auto; color: #fff; box-sizing: border-box; }
+        .store-title { font-size: 18px; font-weight: bold; color: #38bdf8; margin-bottom: 15px; border-bottom: 2px solid #1f2937; padding-bottom: 5px; }
+        .store-item { display: flex; background: #1e293b; padding: 10px; border-radius: 12px; align-items: center; gap: 12px; margin-bottom: 12px; border: 1px solid #334155; }
+        .store-item-icon { font-size: 28px; background: #0f172a; padding: 10px; border-radius: 10px; }
+        .store-item-info { flex: 1; }
+        .store-item-name { font-size: 14px; font-weight: bold; }
+        .store-item-dev { font-size: 11px; color: #94a3b8; }
+        .download-btn { background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; min-width: 70px; }
+        .download-progress { display: none; width: 100%; height: 4px; background: #334155; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+        .progress-bar { width: 0%; height: 100%; background: #38bdf8; transition: width 0.1s; }
+
+        /* واجهة تصميم الإعدادات والملفات والكاميرا */
+        .settings-item { padding: 12px; background: #1e293b; border-radius: 8px; margin-bottom: 10px; cursor: pointer; border: 1px solid #334155; font-size: 13px; font-weight: bold; text-align: center; }
+        .settings-item:hover { background: #334155; }
+        #camera-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    </style>
+</head>
+<body>
+
+    <div class="phone-frame" id="my-phone">
+        <!-- شريط الحالة لأندرويد -->
+        <div class="status-bar">
+            <div id="status-time">00:00</div>
+            <div style="display:flex; gap: 5px; align-items:center;">
+                <span>📶</span>
+                <span id="status-battery">100%</span>🔋
+            </div>
+        </div>
+
+        <!-- البوب اب المنبثق للإشعارات الذكية -->
+        <div class="notification-toast" id="system-toast">
+            <span style="font-size:20px;">🔔</span>
+            <div>
+                <b id="toast-title" style="display:block; color:#38bdf8;">نظام أندرويد OS</b>
+                <span id="toast-body">مرحباً بك في أسرع محاكي ذكي للويب!</span>
+            </div>
+        </div>
+        
+        <!-- الشاشة الحية وهيكل التطبيقات الافتراضية للبداية -->
+        <div class="phone-screen" id="phone-screen">
+            <div class="apps-grid" id="home-screen">
+                
+                <!-- متجر تطبيقات بلاي ستور الحصري -->
+                <div class="app-icon" onclick="openStoreApp()">
+                    <div class="icon-placeholder playstore-bg">▶</div>
+                    <div class="app-name">Play Store</div>
+                </div>
+
+                <div class="app-icon" onclick="openSettingsApp()">
+                    <div class="icon-placeholder settings-bg">⚙️</div>
+                    <div class="app-name">الإعدادات</div>
+                </div>
+
+                <div class="app-icon" onclick="openApp('Let\'s Chat 💬', 'https://ultravex-glitch.github.io/Wake-chat-/', false)">
+                    <div class="icon-placeholder chat-bg">💬</div>
+                    <div class="app-name">Let's Chat</div>
+                </div>
+
+                <div class="app-icon" onclick="openApp('Google 🌐', 'https://www.google.com/', false)">
+                    <div class="icon-placeholder google-bg">G</div>
+                    <div class="app-name">Google</div>
+                </div>
+
+                <div class="app-icon" onclick="openCamera()">
+                    <div class="icon-placeholder camera-bg">📷</div>
+                    <div class="app-name">الكاميرا</div>
+                </div>
+
+                <div class="app-icon" onclick="openFiles()">
+                    <div class="icon-placeholder files-bg">📂</div>
+                    <div class="app-name">الملفات</div>
+                </div>
+
+            </div>
+
+            <!-- حاوية فتح التطبيقات والألعاب والـ HTML المخصصة -->
+            <div class="app-window" id="app-window">
+                <div class="app-bar">
+                    <span id="current-app-title">تطبيق جاري التشغيل...</span>
+                    <button class="close-btn" onclick="closeApp()">خروج ✖</button>
+                </div>
+                
+                <!-- واجهة متجر بلاي ستور داخلياً -->
+                <div id="playstore-interface" class="store-container" style="display:none;">
+                    <div class="store-title">الألعاب والتطبيقات المتاحة للتحميل 📥</div>
+                    
+                    <div class="store-item" id="item-slither">
+                        <div class="store-item-icon">🐍</div>
+                        <div class="store-item-info">
+                            <div class="store-item-name">لعبة الدودة Slither.io</div>
+                            <div class="store-item-dev">شركة ألعاب الترفيه العالي</div>
+                            <div class="download-progress"><div class="progress-bar"></div></div>
+                        </div>
+                        <button class="download-btn" onclick="installApp('لعبة الدودة 🐍', 'https://slither.io', '🐍', false, 'item-slither')">تثبيت</button>
+                    </div>
+
+                    <div class="store-item" id="item-granny">
+                        <div class="store-item-icon">👵</div>
+                        <div class="store-item-info">
+                            <div class="store-item-name">Granny 3D Horror</div>
+                            <div class="store-item-dev">مطوري ألعاب الرعب الأسطورية</div>
+                            <div class="download-progress"><div class="progress-bar"></div></div>
+                        </div>
+                        <button class="download-btn" onclick="installApp('Granny 3D 👵', 'https://grannyonline.io', '👵', true, 'item-granny')">تثبيت</button>
+                    </div>
+
+                    <div class="store-item" id="item-subway">
+                        <div class="store-item-icon">🏃</div>
+                        <div class="store-item-info">
+                            <div class="store-item-name">Subway Surfers Premium</div>
+                            <div class="store-item-dev">ألعاب الركض الكلاسيكية</div>
+                            <div class="download-progress"><div class="progress-bar"></div></div>
+                        </div>
+                        <button class="download-btn" onclick="installApp('Subway Surfers 🏃', 'https://subwaygame.io', '🏃', true, 'item-subway')">تثبيت</button>
+                    </div>
+
+                    <div class="store-item" id="item-aternos">
+                        <div class="store-item-icon">☁️</div>
+                        <div class="store-item-info">
+                            <div class="store-item-name">Aternos Server Manager</div>
+                            <div class="store-item-dev">أداة إدارة خوادم ماينكرافت</div>
+                            <div class="download-progress"><div class="progress-bar"></div></div>
+                        </div>
+                        <button class="download-btn" onclick="installApp('Aternos 🌐', 'https://aternos.org', 'A', false, 'item-aternos')">تثبيت</button>
+                    </div>
+                </div>
+
+                <!-- واجهة تطبيق الإعدادات المدمج للتحكم الكامل -->
+                <div id="settings-interface" style="display:none; padding:20px; background:#111827; height:100%; box-sizing:border-box;">
+                    <h3 style="color:#38bdf8; margin-top:0;">تخصيص نظام أندرويد ⚙️</h3>
+                    <p>اختر خلفية الشاشة المفضلة لديك:</p>
+                    <div class="settings-item" onclick="changeWallpaper('https://unsplash.com')">خلفية النيون الافتراضية ✨</div>
+                    <div class="settings-item" onclick="changeWallpaper('https://unsplash.com')">خلفية التدرج الملون اللامع 🌈</div>
+                    <div class="settings-item" onclick="changeWallpaper('https://unsplash.com')">خلفية حماسية أنميشن ☄️</div>
+                </div>
+
+                <video id="camera-video" autoplay playsinline style="display:none;"></video>
+                <div id="files-app" style="display:none; padding:20px; font-family:monospace; font-size:14px; background:#111; height:100%;">
+                    <p style="color:#22c55e;">&gt; root@android_system:/$ ls -la</p>
+                    <p>📁 System_Android_OS (4.8 GB)</p>
+                    <p>📁 Installed_From_PlayStore (192 MB)</p>
+                    <p style="color:#38bdf8; margin-top:20px;">النظام مستقر تماماً وجميع التطبيقات المحملة تعمل بكفاءة عالية في الذاكرة العشوائية.</p>
+                </div>
+                <iframe class="app-content" id="app-frame" src="" allow="autoplay; gamepad; fullscreen; camera;"></iframe>
+            </div>
+
+            <div class="home-bar" onclick="closeApp()"></div>
+        </div>
+
+        <div class="android-navbar">
+            <div class="nav-icon" onclick="closeApp()">⬜</div>
+            <div class="nav-icon" onclick="closeApp()">🔵</div>
+            <div class="nav-icon" onclick="closeApp()">🔺</div>
+        </div>
+    </div>
+    <script>
+        const phone = document.getElementById('my-phone');
+        const appWindow = document.getElementById('app-window');
+        const appFrame = document.getElementById('app-frame');
+        const appTitle = document.getElementById('current-app-title');
+        const videoElement = document.getElementById('camera-video');
+        const filesElement = document.getElementById('files-app');
+        const playstoreUI = document.getElementById('playstore-interface');
+        const settingsUI = document.getElementById('settings-interface');
+        let streamInstance = null;
+
+        // 1. تحديث شريط الحالة تلقائياً (الساعة والبطارية)
+        function updateStatusBar() {
+            const now = new Date();
+            document.getElementById('status-time').innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            if(navigator.getBattery) {
+                navigator.getBattery().then(bat => {
+                    document.getElementById('status-battery').innerText = Math.round(bat.level * 100) + "%";
+                });
+            }
+        }
+        setInterval(updateStatusBar, 1000);
+        updateStatusBar();
+
+        // 2. نظام الإشعارات المنبثقة الذكي مع نغمة رقمية
+        function triggerNotification(title, message) {
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-body').innerText = message;
+            const toast = document.getElementById('system-toast');
+            toast.classList.add('show');
+            
+            // محاكاة نغمة إشعار الهاتف رقمياً بذكاء عبر المتصفح
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, ctx.currentTime); 
+                osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.15);
+            } catch(e){}
+
+            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+        }
+        setTimeout(() => { triggerNotification("نظام تشغيل أندرويد 🤖", "تم تحميل الواجهات ومحرك Play Store بنجاح!"); }, 2000);
+
+        function openApp(title, url, needsLandscape) {
+            resetAppContainer();
+            appTitle.innerText = title;
+            appFrame.src = url;
+            appFrame.style.display = 'block';
+            appWindow.style.display = 'flex';
+            if (needsLandscape) phone.classList.add('landscape');
+            else phone.classList.remove('landscape');
+        }
+
+        function openStoreApp() {
+            resetAppContainer();
+            appTitle.innerText = "Google Play Store 📥";
+            playstoreUI.style.display = 'block';
+            appWindow.style.display = 'flex';
+            phone.classList.remove('landscape');
+        }
+
+        function openSettingsApp() {
+            resetAppContainer();
+            appTitle.innerText = "الإعدادات ⚙️";
+            settingsUI.style.display = 'block';
+            appWindow.style.display = 'flex';
+            phone.classList.remove('landscape');
+        }
+
+        // 3. نظام تثبيت وتحميل التطبيقات التفاعلي الفوري على الشاشة الرئيسية!
+        function installApp(name, url, icon, landscape, itemId) {
+            const item = document.getElementById(itemId);
+            const btn = item.querySelector('.download-btn');
+            const progressContainer = item.querySelector('.download-progress');
+            const progressBar = item.querySelector('.progress-bar');
+
+            if(btn.innerText === "تفعيل" || btn.innerText === "فتح") {
+                openApp(name, url, landscape);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "جاري التحميل...";
+            progressContainer.style.display = 'block';
+            
+            let width = 0;
+            const interval = setInterval(() => {
+                if(width >= 100) {
+                    clearInterval(interval);
+                    btn.disabled = false;
+                    btn.innerText = "فتح";
+                    btn.style.background = "#3b82f6";
+                    
+                    // توليد وحقن أيقونة التطبيق المثبت فوراً وبديناميكية كاملة في الشاشة الرئيسية!
+                    const grid = document.getElementById('home-screen');
+                    const newApp = document.createElement('div');
+                    newApp.className = "app-icon";
+                    newApp.onclick = function() { openApp(name, url, landscape); };
+                    newApp.innerHTML = `<div class="icon-placeholder dynamic-app-bg">${icon}</div><div class="app-name">${name.split(' ')[0]}</div>`;
+                    grid.appendChild(newApp);
+
+                    triggerNotification("Play Store 📥", `تم تثبيت تطبيق [ ${name} ] بنجاح على شاشتك الرئيسية!`);
+                } else {
+                    width += 5;
+                    progressBar.style.width = width + "%";
+                }
+            }, 100);
+        }
+
+        function changeWallpaper(url) {
+            document.documentElement.style.setProperty('--main-bg', `url('${url}')`);
+            triggerNotification("النظام ⚙️", "تم تحديث خلفية شاشة الهاتف بنجاح!");
+        }
+
+        async function openCamera() {
+            resetAppContainer();
+            appTitle.innerText = "الكاميرا 📷";
+            videoElement.style.display = 'block';
+            appWindow.style.display = 'flex';
+            phone.classList.remove('landscape');
+            try {
+                streamInstance = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                videoElement.srcObject = streamInstance;
+            } catch (err) {
+                alert("يرجى إعطاء صلاحية الكاميرا للمتصفح.");
+                closeApp();
+            }
+        }
+
+        function openFiles() {
+            resetAppContainer();
+            appTitle.innerText = "مدير الملفات 📂";
+            filesElement.style.display = 'block';
+            appWindow.style.display = 'flex';
+            phone.classList.remove('landscape');
+        }
+
+        function resetAppContainer() {
+            appFrame.style.display = 'none';
+            videoElement.style.display = 'none';
+            filesElement.style.display = 'none';
+            playstoreUI.style.display = 'none';
+            settingsUI.style.display = 'none';
+            appFrame.src = '';
+            if (streamInstance) {
+                streamInstance.getTracks().forEach(track => track.stop());
+                streamInstance = null;
+            }
+        }
+
+        function closeApp() {
+            resetAppContainer();
+            appWindow.style.display = 'none';
+            phone.classList.remove('landscape');
+        }
+    </script>
+</body>
+</html>
